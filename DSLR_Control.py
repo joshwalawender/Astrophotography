@@ -7,23 +7,25 @@ import sys
 import os
 import argparse
 import logging
+import re
+import yaml
 import subprocess
 import datetime
 import pytz
 import ephem
 
+# killall PTPCamera
 
 ##-------------------------------------------------------------------------
 ## Define Camera Class
 ##-------------------------------------------------------------------------
-def Camera(object):
+class Camera(object):
     '''Class representing the camera configuration
     '''
-    def __init__(self, camera='Canon 5D',\
+    def __init__(self, port=None, logger=None,\
                  mode=None, aperture=None,\
                  exposure=None, ISO=None,\
-                 port=None, logger=None):
-        self.camera_type = camera
+                 ):
         self.mode = mode
         self.aperture = aperture
         self.exposure = exposure
@@ -31,40 +33,39 @@ def Camera(object):
         self.port = port
         self.logger = logger
         ## Gphoto
-        self.gphoto = 'sudo /sw/bin/gphoto2'
-        ## Commands
-        if self.camera_type == 'Canon 5D':
-            self.imageformat_cmd = '/main/settings/imageformat'
-            self.imageformat_list = {'RAW': '0'}
-            self.focusmode_cmd = '/main/settings/focusmode'
-            self.focusmode_list = {'manual': '3'}
-            self.mode_cmd = ''
-            self.mode_list = {'Av': 0,
-                              'Tv': 0,
-                              'M': 0}
-            self.aperture_cmd = ''
-            self.aperture_list = {'1.4': 0,
-                                  '1.8': 0,
-                                  '2.0': 0,
-                                  '2.8': 0,
-                                  '3.5': 0,
-                                  '4.0': 0,
-                                  '4.5': 0,
-                                  '5.6': 0,
-                                  '6.3': 0,
-                                  '8.0': 0,
-                                 }
-            self.exposure_cmd = ''
-            self.exposure_list = {}
-            self.ISO_cmd = ''
-            self.ISO_list = {'50': 0,
-                             '100': 0,
-                             '200': 0,
-                             '800': 0,
-                             '1600': 0,
-                             '3200': 0,
-                             '6400': 0,
-                             '12800': 0}
+        self.gphoto = '/sw/bin/gphoto2'
+        ## Get All Commands
+        
+
+
+    def get_all_commands(self):
+        command = [self.gphoto]
+        if self.port:
+            command.append('--port')
+            command.append(self.port)
+        command.append('--list-all-config')
+        result = subprocess.check_output(command).split('\n')
+        yaml_string = ''
+        for line in result:
+            IsLabel = re.match('^Label:\s(.*)', line)
+            IsType  = re.match('^Type:\s(.*)', line)
+            IsCurrent = re.match('^Current:\s(.*)', line)
+            IsChoice = re.match('^Choice:\s(.*)', line)
+            IsPrintable = re.match('^Printable:\s(.*)', line)
+            if IsLabel: line = '  {}'.format(line)
+            elif IsType: line = '  {}'.format(line)
+            elif IsCurrent: line = '  {}'.format(line)
+            elif IsChoice: line = '  {}'.format(line)
+            elif IsPrintable: line = '  {}'.format(line)
+            elif line == '': pass
+            else: line = '- name: {}'.format(line)
+            yaml_string += '{}\n'.format(line)
+        command_list = yaml.load(yaml_string)
+        commands = {}
+        for command in command_list:
+            assert command['Label']
+            commands[command['Label']] = command
+        return commands
 
 
     def set_image_format(self, format):
